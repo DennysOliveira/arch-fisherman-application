@@ -6,14 +6,14 @@ CoordMode, Mouse, Screen
 #InstallKeybdHook
 ; [x] Function to add a new game client to the game handle list
 ; [x] Function to emit key events to game client windows
-; [ ] Create a GUI for users to authenticate
+; [x] Create a GUI for users to authenticate
 ; [ ] Enable user to save its data
 ; [ ] Enable user to load saved data, manually
-
-
+; [ ] Enable user to change Keybinds for hotkeys
 
 ; Import libraries
-#Include, ../lib/Utilities.ahk
+#Include, Lib/Utilities.ahk
+#Include, Lib/JSON.ahk
 
 ; Global Variables
 Global state := { PAUSED: 0, ACTIVE: 1 }
@@ -25,6 +25,7 @@ Global BroadcasterHandle
 Global ConfigDir := A_AppData "\Bardsnight\AA Kyrios Fisherman\"
 Global ConfigFullPath := ConfigDir "user.preferences"
 Global GuiVisible := false
+Global ApplicationVersion := "1.0.0"
 
 ; User Config
 Global KeyList := ["y", "u", "i", "h", "j"]
@@ -38,12 +39,29 @@ Global BroadcasterCharacter := "Rubinite"
 ; User pointer config
 Global targetBar := { x: 0, y: 0, c: 0 }
 Global fishingBar := [{ x: 0, y: 0, c: 0 }
-                     ,{ x: 0, y: 0, c: 0 }
-                     ,{ x: 0, y: 0, c: 0 }
-                     ,{ x: 0, y: 0, c: 0 }
-                     ,{ x: 0, y: 0, c: 0 }]
+,{ x: 0, y: 0, c: 0 }
+,{ x: 0, y: 0, c: 0 }
+,{ x: 0, y: 0, c: 0 }
+,{ x: 0, y: 0, c: 0 }]
 
 Global currentFishingBarColor := []
+
+#Include, Routines/ValidateVersion.ahk
+
+result := GetServerSideVersion()
+
+if(result.version.number != ApplicationVersion) {
+    MsgBox, % "Application version outdated. Download a new version on the website."
+    ExitApp, 0
+}
+
+#Include, GUI/Authentication.ahk
+
+While (!authenticated) {
+
+}
+
+Initialize()
 
 ; Main Loop
 Loop {
@@ -52,7 +70,7 @@ Loop {
         ; Get current pixel color based on earlier x,y set positions
         ; Target Bar pixel
         currentTargetBarColor := PixelGetColor(targetBar.x, targetBar.y)
-                
+
         ; Validate Target Existance using Pixel Color Checks
         if (currentTargetBarColor = targetBar.c) {
             for index, element in fishingBar {
@@ -64,9 +82,8 @@ Loop {
                     ; Verify if current color is diff   
                     if (currentColor != element.c){
 
-                        
                         MsgBox, % "Index Verification - SpellTimer: " SpellTimer[index] " - Key: " KeyList[index]
-                        
+
                         ; Broadcast keys through all connected clients for the current skill
                         Broadcast(KeyList[index])
                         SpellTimer[index] := TimerInit()
@@ -74,7 +91,7 @@ Loop {
                     }
                 }
             }
-        }    
+        } 
     }
 }
 
@@ -108,20 +125,14 @@ GetBroadcasterTarget() {
 }
 
 Initialize() {
-    ; Attach broadcaster to current on top game client
-    success := AttachBroadcaster()
-
-    if (!success) {
-        MsgBox % "Couldnt attach, something went wrong or the client is already attached."
-        return
-    }
 
     ; Create the GUI inside the broadcaster client
     Global GuiHandle := InstantiateGUI()
 
-    ; Show GUI
-    ToggleGUI()
-    
+    ; Show GUI Manually centered as first position
+    Gui, MainGUI:Show, Center
+    GuiVisible := true
+
 }
 
 InstantiateGUI(){
@@ -144,7 +155,7 @@ InstantiateGUI(){
 
     ; Non-tab specific Controls
     Gui, Tab ; When declaring this line, every control created below will NOT be TAB specific
-    Gui, Add, Text, x150 y15 cBlack, Press [F9] to toggle this GUI. ; Header Text
+    Gui, Add, Text, x150 y15 cBlack, Press [Shift + F3] to attach the main client. ; Header Text
     Gui, Add, Button, w100 h20 x190 y270 gSaveRoutine, Save ; Save Config Button
 
     ; ################
@@ -156,14 +167,12 @@ InstantiateGUI(){
 
     ; Status tab controls
     Gui, Add, Text, x10 y60 , Application Status
-        
+
     Gui, Add, Text, x10 y80 w1000 vGuiControl_BroadcasterStatus
     GuiControl, Text, GuiControl_BroadcasterStatus, % "Broadcaster Status: OK - [" . BroadcasterHandle . "]"
 
     Gui, Add, Text, x10 y110 w1000 vGuiControl_AttachedClients
     GuiControl, Text, GuiControl_AttachedClients, % "Attached Clients: [0]"
-
-
 
     ; ################
     ; Tab: Configuration
@@ -173,12 +182,12 @@ InstantiateGUI(){
     Global GuiControl_StatusTargetBarColor
     Global GuiControl_StatusFishingBarPosition
     Global GuiControl_StatusFishingBarColor
-    
+
     ; Configuration Tab Controls
     Gui, Add, Text, x10 y60 , Get Target Health Bar Information
     Gui, Add, Button, w100 h20 x10 y80 gBtnGetTargetBarPosition, Get Position
     Gui, Add, Button, w100 h20 x120 y80 gBtnGetTargetBarColor, Get Colors
-    
+
     Gui, Add, Text, x10 y100 w500 vGuiControl_StatusTargetBarPosition, Position: Not set
     Gui, Add, Text, x140 y100 w500 vGuiControl_StatusTargetBarColor, Color: Not set
 
@@ -188,7 +197,6 @@ InstantiateGUI(){
 
     Gui, Add, Text, x10 y180 vGuiControl_StatusFishingBarPosition, Position: Not set
     Gui, Add, Text, x140 y180 vGuiControl_StatusFishingBarColor, Color: Not set
-    
 
     ; Tab: Preferences
     Gui, Tab, Preferences
@@ -199,13 +207,11 @@ InstantiateGUI(){
     Global Btn_Binding_2
     Global Btn_Binding_3
     Global Btn_Binding_4
-    
 
     ; Preferences Tab Controls
     Gui, Add, Text, x10 y60, Main Character Name
     Gui, Add, Edit, x10 y80 r1 w120 -WantReturn vGuiControl_Edit_BroadcasterCharacter gBroadcasterCharacterUpdated, %BroadcasterCharacter%
 
-    
     Gui, Add, Text, x10 y120, Keybindings
     Gui, Add, Text, x10 y140, "1: "
     Gui, Add, Button, w100 h20 x120 y140 gBtn_Bind_0 vBtn_Binding_0, % KeyList[1]
@@ -221,30 +227,29 @@ InstantiateGUI(){
 
     Gui, Add, Text, x10 y220, "5: "
     Gui, Add, Button, w100 h20 x120 y220 gBtn_Bind_4 vBtn_Binding_4, % KeyList[5]
-    
+
     ; Clear tab 
     Gui, Tab
-    
 
     ; Declares SubMenus and their Options
-    Menu, File_Submenu,   Add,    &Save,     SaveRoutine
-    Menu, File_Submenu,   Add,    &Exit,     ExitRoutine
-    Menu, Tools_Submenu,  Add,    &Debug,    DebugRoutine
-    Menu, Help_Submenu,   Add,    &About,    AboutRoutine
+    Menu, File_Submenu, Add, &Save, SaveRoutine
+    Menu, File_Submenu, Add, &Exit, ExitRoutine
+    Menu, Tools_Submenu, Add, &Debug, DebugRoutine
+    Menu, Help_Submenu, Add, &About, AboutRoutine
 
     ; Adds Submenus to MenuBar
-    Menu, MenuBar,      Add,    &File,     :File_Submenu
-    Menu, MenuBar,      Add,    &Tools,    :Tools_Submenu
-    Menu, MenuBar,      Add,    &Help,     :Help_Submenu
+    Menu, MenuBar, Add, &File, :File_Submenu
+    Menu, MenuBar, Add, &Tools, :Tools_Submenu
+    Menu, MenuBar, Add, &Help, :Help_Submenu
 
     ; Define MenuBar Styles
-    Menu, MenuBar,      Color,  White
+    Menu, MenuBar, Color, White
 
     ; Append menu "MenuBar" to LastFound Gui
     Gui, Menu, MenuBar
 
     Global IsGuiVisible := true
-    Gui, MainGUI:Show, x0 y0    
+    Gui, MainGUI:Show, x0 y0 
 
     return %GuiHandle%
 }
@@ -274,7 +279,8 @@ AttachGameClient() {
     } 
 }
 
-AttachBroadcaster() {        
+AttachBroadcaster() { 
+
     newClienthandle := WinActive("ahk_class ArcheAge") 
     WinGetTitle, gameTitle, ahk_id %newClienthandle% 
 
@@ -289,7 +295,7 @@ AttachBroadcaster() {
 
     if (newClientHandle) {
         BroadcasterHandle := newClienthandle
-        TrayTip, Success, Broadcaster game client attached to %newClienthandle%,,1        
+        TrayTip, Success, Broadcaster game client attached to %newClienthandle%,,1 
         return true
     } else {
         TrayTip, Fail, Couldn't find a game to attach to.,,3
@@ -303,6 +309,7 @@ TestAttach() {
 
 ToggleGUI(){
     Gui, MainGUI:Show
+
     if (GuiVisible) {
         Gui, MainGUI:Hide
         GuiVisible := false
@@ -313,131 +320,139 @@ ToggleGUI(){
 }
 
 BtnGetTargetBarPosition:
-{    
-    While(!GetKeyState("LButton"))
-    {
-        mPos := MouseGetPos()
-        ToolTip, % "Clique no comeco da barra de mana do Target.", mPos[0] + 10, mPos[1] + 10
-    }
-
-    targetBar.x := mPos[0]
-    targetBar.y := mPos[1]  
-
-    GuiControl, MainGUI:Text, GuiControl_StatusTargetBarPosition, % "Position: [" . targetBar.x . ", " . targetBar.y . "]"
-    GuiControl, MainGUI:Text, GuiControl_StatusTargetBarColor, % "Color: Not set"
-    targetBar.c := 0
-
-    TrayTip, Success, % "A posição da barra de mana do alvo foi carregada com sucesso."
-
-    ClearTooltip()
-    return
-}
-
-BtnGetTargetBarColor:
-{
-    if (targetBar.x = 0 || targetBar.y = 0) {
-        TrayTip, Error, % "To get the color, you have to set a position"
-        return
-    }
-    
-    targetBar.c := PixelGetColor(targetBar.x, targetBar.y)    
-    fontColor := targetBar.c
-    Gui, Font, %fontColor%
-    GuiControl, MainGUI:Text, GuiControl_StatusTargetBarColor, % "Color: [" . targetBar.c . "]"
-    TrayTip, Success, % "As cores da barra de mana do alvo foram carregadas com sucesso."
-    return
-}
-
-BtnGetFishingBarPosition:
-{
-    
-    for index, value in fishingBar {
+    { 
         While(!GetKeyState("LButton"))
         {
             mPos := MouseGetPos()
-            ToolTip, % "X: " mPos[0] " Y: " mPos[1] " - Clique na " . index . "a habilidade de pesca.", mPos[0] + 10, mPos[1] + 10
-        }
-        
-        mPos := MouseGetPos()
-        fishingBar[index].x := mPos[0]
-        fishingBar[index].y := mPos[1]
-
-        While(!GetKeyState("x", "P")) {
-            mPos := MouseGetPos()
-            ; col := PixelGetColor()
-            ToolTip, % "Press X to store the current skill color as the neutral state."
+            ToolTip, % "Clique no comeco da barra de mana do Target.", mPos[0] + 10, mPos[1] + 10
         }
 
-        mPos := MouseGetPos()
-        fishingBar[index].c := PixelGetColor(fishingBar[index].x, fishingBar[index].y)
+        targetBar.x := mPos[0]
+        targetBar.y := mPos[1] 
+
+        GuiControl, MainGUI:Text, GuiControl_StatusTargetBarPosition, % "Position: [" . targetBar.x . ", " . targetBar.y . "]"
+        GuiControl, MainGUI:Text, GuiControl_StatusTargetBarColor, % "Color: Not set"
+        targetBar.c := 0
+
+        TrayTip, Success, % "A posição da barra de mana do alvo foi carregada com sucesso."
 
         ClearTooltip()
-        Sleep, 250
-    }    
-    
-    TrayTip, Success, % "All skillbar positions were set successfully."
-    GuiControl, MainGUI:Text, GuiControl_StatusFishingBarPosition, % "Position: Set"
-    GuiControl, MainGUI:Text, GuiControl_StatusFishingBarColor, % "Color: Set"
-    
-    return
-}
+        return
+    }
+
+BtnGetTargetBarColor:
+    {
+        if (targetBar.x = 0 || targetBar.y = 0) {
+            TrayTip, Error, % "To get the color, you have to set a position"
+            return
+        }
+
+        targetBar.c := PixelGetColor(targetBar.x, targetBar.y) 
+        fontColor := targetBar.c
+        Gui, Font, %fontColor%
+        GuiControl, MainGUI:Text, GuiControl_StatusTargetBarColor, % "Color: [" . targetBar.c . "]"
+        TrayTip, Success, % "As cores da barra de mana do alvo foram carregadas com sucesso."
+        return
+    }
+
+BtnGetFishingBarPosition:
+    {
+
+        for index, value in fishingBar {
+            While(!GetKeyState("LButton"))
+            {
+                mPos := MouseGetPos()
+                ToolTip, % "X: " mPos[0] " Y: " mPos[1] " - Clique na " . index . "a habilidade de pesca.", mPos[0] + 10, mPos[1] + 10
+            }
+
+            mPos := MouseGetPos()
+            fishingBar[index].x := mPos[0]
+            fishingBar[index].y := mPos[1]
+
+            While(!GetKeyState("x", "P")) {
+                mPos := MouseGetPos()
+                ; col := PixelGetColor()
+                ToolTip, % "Press X to store the current skill color as the neutral state."
+            }
+
+            mPos := MouseGetPos()
+            fishingBar[index].c := PixelGetColor(fishingBar[index].x, fishingBar[index].y)
+
+            ClearTooltip()
+            Sleep, 250
+        } 
+
+        TrayTip, Success, % "All skillbar positions were set successfully."
+        GuiControl, MainGUI:Text, GuiControl_StatusFishingBarPosition, % "Position: Set"
+        GuiControl, MainGUI:Text, GuiControl_StatusFishingBarColor, % "Color: Set"
+
+        return
+    }
 
 BtnGetFishingBarColor:
-{    
-    ; if (fishingBar[0].x = 0) {
-    ;     TrayTip, Error, You have to set position before grabbing color.
-    ;     return
-    ; }
+    { 
+        ; if (fishingBar[0].x = 0) {
+        ;     TrayTip, Error, You have to set position before grabbing color.
+        ;     return
+        ; }
 
-    ; for index, element in fishingBar {
-    ;     if(element.x = 0 and element.y = 0) {
-    ;         TrayTip, Error, You have to set position before grabbing color.
-    ;         return
-    ;     }
+        ; for index, element in fishingBar {
+        ;     if(element.x = 0 and element.y = 0) {
+        ;         TrayTip, Error, You have to set position before grabbing color.
+        ;         return
+        ;     }
 
-    ;     ; positionArray := [element.x, element.y]
-    ;     fishingBar[index].c := PixelGetColor(element.x, element.y)
-    ; }
-    ; GuiControl, MainGUI:Text, GuiControl_StatusFishingBarColor, % "Color: Set"
-    
-    return
-}
+        ;     ; positionArray := [element.x, element.y]
+        ;     fishingBar[index].c := PixelGetColor(element.x, element.y)
+        ; }
+        ; GuiControl, MainGUI:Text, GuiControl_StatusFishingBarColor, % "Color: Set"
 
-MouseGetPos(){
-    array := []
-    MouseGetPos, posX, posY
-    array[0] := posX
-    array[1] := posY
-    return array
-}
+        return
+    }
 
-PixelGetColor(posX, posY){
-    PixelGetColor, color, posX, posY, Alt
-    ; MsgBox, % posX ", " posY " equals to " color
-    return color
-}
+    MainGUIGuiClose() {
+        MsgBox, 0x4, Exit, Do you want to exit?
+        IfMsgBox Yes
+        ExitApp
+        else 
+            return
 
-TimerDiff(timer){
-    now := A_TickCount
-    result := now - timer
-    return result
-}
+    }
 
-TimerInit(){
-    return A_TickCount
-}
+    MouseGetPos(){
+        array := []
+        MouseGetPos, posX, posY
+        array[0] := posX
+        array[1] := posY
+        return array
+    }
 
-#Include, GUI/Routines/Interface/Interaction.ahk
-#Include, GUI/Routines/Preferences/Keybinding.ahk
+    PixelGetColor(posX, posY){
+        PixelGetColor, color, posX, posY, Alt
+        ; MsgBox, % posX ", " posY " equals to " color
+        return color
+    }
 
-; #Include, Debug/DebugFunctions.ahk
+    TimerDiff(timer){
+        now := A_TickCount
+        result := now - timer
+        return result
+    }
 
+    TimerInit(){
+        return A_TickCount
+    }
 
-; Setup hotkeys
-+F9::Initialize()
+    #Include, GUI/Routines/Interface/Interaction.ahk
+    #Include, GUI/Routines/Preferences/Keybinding.ahk
 
-; Usage hotkeys
-+F1::ToggleScript()
-+F2::AttachGameClient()
+    ; #Include, Debug/DebugFunctions.ahk
 
-+F::GetBroadcasterTarget()
+    ; Setup hotkeys
+    +F3::AttachBroadcaster()
+
+    ; Usage hotkeys
+    +F1::ToggleScript()
+    +F2::AttachGameClient()
+
+    +F::GetBroadcasterTarget()
