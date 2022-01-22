@@ -1,9 +1,6 @@
-
-
 ; Variables
 Global GuiName := "AuthenticationGUI"
 Global GuiHandle := 0x0
-Global BaseURL := "http://localhost:4000"
 
 ; ----------------------
 ; Create a GUI
@@ -68,7 +65,6 @@ ButtonAuthenticate()
 
 AuthenticateUserRequest(username, password)
 {
-    endpoint := "http://localhost:4000/api/v1/user/authenticate"
 
     try { 
         ; Create WinHTTPRequest Object
@@ -77,13 +73,15 @@ AuthenticateUserRequest(username, password)
         request.SetTimeouts(0, 30000, 30000, 120000)
 
         ; 
-        request.Open("POST", endpoint, true)
+        request.Open("POST", Endpoints.userAuthenticate, true)
 
         ; 
         request.setRequestHeader("Content-Type", "application/json")
 
         ; Dump object into a JSON string
         body := JSON.Dump({"username": username, "password": password})
+
+        ; MsgBox, % body
 
         request.Send(body) 
 

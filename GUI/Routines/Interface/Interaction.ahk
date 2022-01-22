@@ -1,28 +1,26 @@
-
-SaveRoutine:
-{
+SaveRoutine() {
     return
 }
 
-ExitRoutine:
-{
+LoadRoutine() {
     return
 }
 
-DebugRoutine:
-{
+ExitRoutine() {
     return
 }
 
-AboutRoutine:
-{
+DebugRoutine() {
     return
 }
 
-BroadcasterCharacterUpdated:
-{
+AboutRoutine() {
+    return
+}
+
+BroadcasterCharacterUpdated() {
     Gui, MainGUI:Submit, NoHide
-    ; TrayTip, Changed, New name: %GuiControl_Edit_BroadcasterCharacter%
+
     BroadcasterCharacter := GuiControl_Edit_BroadcasterCharacter
     return
 }
